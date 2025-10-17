@@ -25,7 +25,86 @@ allow_dynamic_backup = get_global_setting('allow_dynamic_backup_creation') == '1
 
 # Событие для остановки потока
 shutdown_event = threading.Event()
+running_tasks = set()
 
+def load_pending_jobs_from_db():
+    """Загружает все pending задачи из БД при старте приложения."""
+    conn = get_svc_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, windows_user, target_db
+        FROM RestoreQueue
+        WHERE status = 'pending'
+        ORDER BY priority, created_at
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    for row in rows:
+        job_id, windows_user, target_db = row
+        current_app.logger.info(f"Задача {job_id} ({target_db}) загружена из БД")
+        # Можно добавить в очередь или сразу запустить
+        # Пока просто логируем
+
+def atomic_claim_job(job_id):
+    """Атомарно захватывает задачу из БД."""
+    conn = get_svc_conn()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE RestoreQueue
+            SET status = 'running', started_at = GETDATE()
+            WHERE id = ? AND status = 'pending'
+        """, job_id)
+        conn.commit()
+        rows_affected = cursor.rowcount
+        return rows_affected > 0
+    except Exception as e:
+        current_app.logger.error(f"Ошибка при захвате задачи {job_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def worker_loop():
+    """Основной цикл фонового потока."""
+    current_app.logger.info("worker_loop: Поток запущен")
+    while not shutdown_event.is_set():
+        try:
+            conn = get_svc_conn()
+            cursor = conn.cursor()
+            # Атомарно получаем одну задачу со статусом 'pending'
+            cursor.execute("""
+                UPDATE TOP(1) RestoreQueue
+                SET status = 'running', started_at = GETDATE()
+                OUTPUT INSERTED.id, INSERTED.windows_user, INSERTED.target_db
+                WHERE status = 'pending'
+                ORDER BY priority, created_at
+            """)
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                job_id, windows_user, target_db = row
+                current_app.logger.info(f"worker_loop: Захвачена задача {job_id} для {target_db}")
+
+                # Запускаем обработку задачи в отдельном потоке
+                thread = threading.Thread(
+                    target=perform_restore_job,
+                    args=({"id": job_id, "windows_user": windows_user, "target_db": target_db},),
+                    daemon=True
+                )
+                thread.start()
+                current_app.logger.info(f"worker_loop: Задача {job_id} передана в поток")
+            else:
+                # Нет задач, ждём
+                current_app.logger.debug("worker_loop: Нет задач, жду 5 секунд...")
+                shutdown_event.wait(timeout=5)
+        except Exception as e:
+            current_app.logger.error(f"worker_loop: Ошибка в основном цикле: {e}")
+            # Ждём перед следующей попыткой
+            shutdown_event.wait(timeout=5)
+    current_app.logger.info("worker_loop: Поток остановлен")
+    
 def update_job_status(job_id, status, error_msg=None):
     conn = get_svc_conn()
     cursor = conn.cursor()
@@ -259,43 +338,9 @@ def get_user_email(windows_login):
 
 def restore_worker():
     """Фоновый поток, который обрабатывает очередь задач RestoreQueue."""
-    current_app.logger.info("restore_worker: Поток запущен")
-    while not shutdown_event.is_set():
-        try:
-            conn = get_svc_conn()
-            cursor = conn.cursor()
-            # Получаем одну задачу со статусом 'pending', с наивысшим приоритетом
-            cursor.execute("""
-                SELECT TOP 1 id, windows_user, target_db
-                FROM RestoreQueue
-                WHERE status = 'pending'
-                ORDER BY priority, created_at
-            """)
-            row = cursor.fetchone()
-            conn.close()
-
-            if row:
-                job_id, windows_user, target_db = row
-                current_app.logger.info(f"restore_worker: Найдена задача {job_id} для {target_db}")
-
-                # Запускаем обработку задачи в отдельном потоке
-                thread = threading.Thread(
-                    target=perform_restore_job,
-                    args=({"id": job_id, "windows_user": windows_user, "target_db": target_db},),
-                    daemon=True
-                )
-                thread.start()
-                current_app.logger.info(f"restore_worker: Задача {job_id} передана в поток")
-            else:
-                # Нет задач, ждём
-                current_app.logger.debug("restore_worker: Нет задач, жду 5 секунд...")
-                shutdown_event.wait(timeout=5)
-        except Exception as e:
-            current_app.logger.error(f"restore_worker: Ошибка в основном цикле: {e}")
-            # Ждём перед следующей попыткой
-            shutdown_event.wait(timeout=5)
-    current_app.logger.info("restore_worker: Поток остановлен")
-
+    load_pending_jobs_from_db()  # <-- Загружаем pending задачи при старте
+    worker_loop()  # <-- Запускаем основной цикл
+    
 def get_backup_path_for_db(source_db_name):
     today = datetime.date.today()
     today_str = today.strftime("%d%m%Y")
