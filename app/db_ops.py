@@ -12,6 +12,8 @@ from .onec_commands import run_1c_command_via_1cv8, run_1c_command_via_rac
 from .email_sender import notify_user_on_restore_complete
 from .logger_db import log_user_action, log_1c_operation
 from .db_utils import get_svc_conn, get_sql_server_conn, get_sql_server_conn_config
+from flask import current_app
+import logging
 
 bp = Blueprint('db_ops', __name__)
 
@@ -256,19 +258,43 @@ def get_user_email(windows_login):
     return row[0] if row else None
 
 def restore_worker():
-    global running_tasks
+    """Фоновый поток, который обрабатывает очередь задач RestoreQueue."""
+    current_app.logger.info("restore_worker: Поток запущен")
     while not shutdown_event.is_set():
-        if len(running_tasks) < max_concurrent and restore_queue:
-            job = restore_queue.popleft()
-            job_id = job['id']
-            running_tasks.add(job_id)
-            update_job_status(job_id, 'running')
-            # Выполняем задачу в отдельном потоке, чтобы не блокировать цикл
-            t = threading.Thread(target=perform_restore_job, args=(job,))
-            t.start()
-        else:
-            # Спит 5 секунд, если нет работы
+        try:
+            conn = get_svc_conn()
+            cursor = conn.cursor()
+            # Получаем одну задачу со статусом 'pending', с наивысшим приоритетом
+            cursor.execute("""
+                SELECT TOP 1 id, windows_user, target_db
+                FROM RestoreQueue
+                WHERE status = 'pending'
+                ORDER BY priority, created_at
+            """)
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                job_id, windows_user, target_db = row
+                current_app.logger.info(f"restore_worker: Найдена задача {job_id} для {target_db}")
+
+                # Запускаем обработку задачи в отдельном потоке
+                thread = threading.Thread(
+                    target=perform_restore_job,
+                    args=({"id": job_id, "windows_user": windows_user, "target_db": target_db},),
+                    daemon=True
+                )
+                thread.start()
+                current_app.logger.info(f"restore_worker: Задача {job_id} передана в поток")
+            else:
+                # Нет задач, ждём
+                current_app.logger.debug("restore_worker: Нет задач, жду 5 секунд...")
+                shutdown_event.wait(timeout=5)
+        except Exception as e:
+            current_app.logger.error(f"restore_worker: Ошибка в основном цикле: {e}")
+            # Ждём перед следующей попыткой
             shutdown_event.wait(timeout=5)
+    current_app.logger.info("restore_worker: Поток остановлен")
 
 def get_backup_path_for_db(source_db_name):
     today = datetime.date.today()
