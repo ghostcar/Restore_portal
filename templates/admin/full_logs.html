@@ -1,0 +1,52 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Полные логи{% endblock %}
+
+{% block breadcrumb %}> <a href="{{ url_for('admin_ops.index') }}">Главная</a> > Полные логи{% endblock %}
+
+{% block admin_content %}
+    <h2>Полные логи</h2>
+
+    <form method="GET" style="margin-bottom: 20px;">
+        <label>С даты: <input type="date" name="start_date" value="{{ start_date or '' }}"></label>
+        <label>По дату: <input type="date" name="end_date" value="{{ end_date or '' }}"></label>
+        <label>Пользователь: <input type="text" name="user" value="{{ user_filter or '' }}"></label>
+        <label>Тип:
+            <select name="log_type">
+                <option value="">Все</option>
+                <option value="auth" {% if log_type == 'auth' %}selected{% endif %}>Аутентификация</option>
+                <option value="action" {% if log_type == 'action' %}selected{% endif %}>Действия</option>
+                <option value="1c" {% if log_type == '1c' %}selected{% endif %}>1С-операции</option>
+            </select>
+        </label>
+        <button type="submit">Фильтровать</button>
+        <a href="{{ url_for('admin_ops.export_full_logs', start_date=start_date, end_date=end_date, user=user_filter, log_type=log_type) }}">Экспорт в CSV</a>
+    </form>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Тип</th>
+                <th>Пользователь</th>
+                <th>IP</th>
+                <th>Событие</th>
+                <th>Детали</th>
+                <th>Время</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.type }}</td>
+                <td>{{ log.windows_user or '' }}</td>
+                <td>{{ log.ip_address or '' }}</td>
+                <td>{{ log.event }}</td>
+                <td><pre style="white-space: pre-wrap; word-break: break-word; max-width: 500px;">{{ log.details or '' }}</pre></td>
+                <td>{{ log.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('admin_ops.index') }}">← Назад</a>
+{% endblock %}

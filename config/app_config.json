@@ -1,0 +1,23 @@
+{
+  "svc_db": {
+    "server": "server-dev1c",
+    "database": "svc_sqlrestore",
+    "uid": "sa",
+    "pwd": "Qwert129asd"
+  },
+  "flask": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug": false,
+    "secret_key": "your-production-secret-key-here"
+  },
+  "paths": {
+    "backup_base_path": "E:\tmp_backup",
+    "cluster_info_file_path": "C:\\Program Files\\1cv8\\srvinfo\\reg_1541\\1CV8Clst.lst"
+  },
+  "sql_server": {
+    "address": "server-dev1c",
+    "uid": "sa",
+    "pwd": "Qwert129asd"
+  }
+}

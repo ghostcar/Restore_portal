@@ -1,0 +1,13 @@
+{
+    "HRMDB" : "TST_HRM_SOV",
+    "UPPDB" : "TST_UPP_SOV",
+    "ERPDB":"TST_ERP_SOV",
+    "storageUser":"",
+    "storagePassw":"",
+    "HRM_storage":"Ложь",
+    "UPP_storage":"Ложь",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Сухенко ОВ",
+    "ERPHeader" : "ERP Сухенко ОВ",
+    "HRMHeader" : "ЗУП Сухенко ОВ"
+    }

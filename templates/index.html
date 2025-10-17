@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Восстановление БД</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Восстановление базы данных</h1>
+    <p>Привет, <strong>{{ user }}</strong>!</p>
+
+    <form id="restoreForm">
+        <label>База данных:
+            <select name="database" required>
+                {% for db in databases %}
+                <option value="{{ db }}">{{ db }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <button type="submit">Восстановить</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('restoreForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const res = await fetch('/restore', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            const result = document.getElementById('result');
+            if (res.ok) {
+                result.innerHTML = `<p style="color:green">${data.message}</p>`;
+            } else {
+                result.innerHTML = `<p style="color:red">${data.error}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

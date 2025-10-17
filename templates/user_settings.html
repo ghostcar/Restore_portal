@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Настройки БД {{ target_db }} — {{ super() }}{% endblock %}
+
+{% block content %}
+    <h1>Настройки для базы {{ target_db }}</h1>
+
+    <form method="POST">
+        <h3>Настройки подключения к 1С-приложению</h3>
+        <label>Логин: <input type="text" name="user_app_login" value="{{ settings.user_app_login or '' }}"></label><br>
+        <label>Пароль: <input type="password" name="user_app_password" value="{{ settings.user_app_password or '' }}"></label><br>
+
+        <h3>Настройки хранилища конфигурации</h3>
+        <label>Логин хранилища: <input type="text" name="user_storage_login" value="{{ settings.user_storage_login or '' }}"></label><br>
+        <label>Пароль хранилища: <input type="password" name="user_storage_password" value="{{ settings.user_storage_password or '' }}"></label><br>
+
+        <button type="submit">Сохранить</button>
+    </form>
+
+    <a href="{{ url_for('db_ops.index') }}">← Назад</a>
+{% endblock %}

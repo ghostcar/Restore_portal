@@ -1,0 +1,13 @@
+{
+    "HRMDB" : "TST_HRM_DOK",
+    "UPPDB" : "TST_UPP_DOK",
+    "ERPDB":"TST_ERP_DOK",
+    "storageUser":"",
+    "storagePassw":"",
+    "HRM_storage":"Ложь",
+    "UPP_storage":"Ложь",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Дунаев ОК",
+    "ERPHeader" : "ERP Дунаев ОК",
+    "HRMHeader" : "ЗУП Дунаев ОК"
+    }

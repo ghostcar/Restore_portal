@@ -1,0 +1,14 @@
+{
+    "HRMDB" : "TST_HRM_KAM",
+    "UPPDB" : "TST_UPP_KAM",
+    "ERPDB":"TST_ERP_KAM",
+    "storageUser":"",
+    "storagePassw":"",
+    "HRM_storage":"Ложь",
+    "UPP_storage":"Ложь",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Кох АМ",
+    "ERPHeader" : "ERP Кох АМ",
+    "HRMHeader" : "ЗУП Кох АМ"
+    }
+    

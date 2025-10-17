@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль — {{ super() }}{% endblock %}
+
+{% block content %}
+    <h1>Профиль пользователя</h1>
+    <p><strong>Пользователь:</strong> {{ user }}</p>
+    <form method="POST">
+        <label>Ваша почта для уведомлений: <input type="email" name="email" value="{{ user_email or '' }}"></label><br>
+        <button type="submit">Сохранить</button>
+    </form>
+    <a href="{{ url_for('db_ops.index') }}">← Назад</a>
+{% endblock %}

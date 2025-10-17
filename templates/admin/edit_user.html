@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Редактировать пользователя {{ user.windows_login }}{% endblock %}
+
+{% block breadcrumb %}> <a href="{{ url_for('admin_ops.users') }}">Пользователи</a> > Редактировать {{ user.windows_login }}{% endblock %}
+
+{% block admin_content %}
+    <h2>Редактировать пользователя {{ user.windows_login }}</h2>
+    <form method="POST" class="admin-form">
+        <label>Имя: <input type="text" name="name" value="{{ user.full_name or '' }}"></label><br>
+        <label>Почта: <input type="email" name="email" value="{{ user.email or '' }}"></label><br>
+        <label>Админ: <input type="checkbox" name="is_admin" {% if user.is_admin %}checked{% endif %}></label><br>
+        <button type="submit">Сохранить</button>
+    </form>
+    <a href="{{ url_for('admin_ops.users') }}">← Назад к списку</a>
+{% endblock %}

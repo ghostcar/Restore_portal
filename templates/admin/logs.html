@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Логи</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Логи задач восстановления</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Пользователь</th>
+                <th>База</th>
+                <th>Статус</th>
+                <th>Начало</th>
+                <th>Конец</th>
+                <th>Ошибка</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.windows_user }}</td>
+                <td>{{ log.target_db }}</td>
+                <td>{{ log.status }}</td>
+                <td>{{ log.started_at or '' }}</td>
+                <td>{{ log.finished_at or '' }}</td>
+                <td>{{ log.error_message or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('admin_ops.index') }}">← Назад</a>
+</body>
+</html>

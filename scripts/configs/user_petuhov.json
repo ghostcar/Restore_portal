@@ -1,0 +1,13 @@
+{
+    "HRMDB" : "TST_HRM_PSP",
+    "UPPDB" : "TST_UPP_PSP",
+    "ERPDB":"TST_ERP_PSP",
+    "storageUser":"",
+    "storagePassw":"",
+    "HRM_storage":"Ложь",
+    "UPP_storage":"Ложь",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Петухов СП",
+    "ERPHeader" : "ERP Петухов СП",
+    "HRMHeader" : "ЗУП Петухов СП"
+    }

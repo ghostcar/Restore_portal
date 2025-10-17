@@ -1,0 +1,15 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Редактировать доступ к {{ db.restore_target_db }}{% endblock %}
+
+{% block breadcrumb %}> <a href="{{ url_for('admin_ops.databases') }}">Базы данных</a> > Редактировать {{ db.restore_target_db }}{% endblock %}
+
+{% block admin_content %}
+    <h2>Редактировать доступ к {{ db.restore_target_db }}</h2>
+    <p><strong>Пользователь:</strong> {{ db.windows_login }}</p>
+    <form method="POST" class="admin-form">
+        <label>Уведомлять пользователя: <input type="checkbox" name="notify_user" {% if db.notify_user %}checked{% endif %}></label><br>
+        <button type="submit">Сохранить</button>
+    </form>
+    <a href="{{ url_for('admin_ops.databases') }}">← Назад к списку</a>
+{% endblock %}

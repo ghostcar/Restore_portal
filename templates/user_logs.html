@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Логи для {{ target_db }} — {{ super() }}{% endblock %}
+
+{% block content %}
+    <h1>Логи задач восстановления для {{ target_db }}</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                {% if is_admin %}<th>Пользователь</th>{% endif %}
+                <th>Статус</th>
+                <th>Начало</th>
+                <th>Конец</th>
+                <th>Ошибка</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                {% if is_admin %}<td>{{ log.windows_user }}</td>{% endif %}
+                <td><span class="status-{{ log.status.lower() }}">{{ log.status }}</span></td>
+                <td>{{ log.started_at or '' }}</td>
+                <td>{{ log.finished_at or '' }}</td>
+                <td>{{ log.error_message or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('db_ops.index') }}">← Назад</a>
+{% endblock %}

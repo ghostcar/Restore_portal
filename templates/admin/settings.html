@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Настройки</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Настройки</h1>
+
+    <h2>Глобальные настройки</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Ключ</th>
+                <th>Значение</th>
+                <th>Описание</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for setting in global_settings %}
+            <tr>
+                <td>{{ setting.setting_key }}</td>
+                <td><input type="text" name="value" value="{{ setting.setting_value }}" id="val_{{ setting.setting_key }}"></td>
+                <td>{{ setting.description or '' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('admin_ops.update_setting') }}" style="display:inline;">
+                        <input type="hidden" name="key" value="{{ setting.setting_key }}">
+                        <input type="hidden" name="table" value="GlobalSettings">
+                        <input type="hidden" name="value" value="" id="hidden_val_{{ setting.setting_key }}">
+                        <button type="button" onclick="updateValue('{{ setting.setting_key }}')">Сохранить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Ограничения</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Ключ</th>
+                <th>Значение</th>
+                <th>Описание</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for limit in limits %}
+            <tr>
+                <td>{{ limit.setting_key }}</td>
+                <td><input type="text" name="value" value="{{ limit.setting_value }}" id="val_l_{{ limit.setting_key }}"></td>
+                <td>{{ limit.description or '' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('admin_ops.update_setting') }}" style="display:inline;">
+                        <input type="hidden" name="key" value="{{ limit.setting_key }}">
+                        <input type="hidden" name="table" value="GlobalLimits">
+                        <input type="hidden" name="value" value="" id="hidden_val_l_{{ limit.setting_key }}">
+                        <button type="button" onclick="updateValueL('{{ limit.setting_key }}')">Сохранить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        function updateValue(key) {
+            const val = document.getElementById('val_' + key).value;
+            document.getElementById('hidden_val_' + key).value = val;
+            document.querySelector(`#val_${key}`).closest('form').submit();
+        }
+        function updateValueL(key) {
+            const val = document.getElementById('val_l_' + key).value;
+            document.getElementById('hidden_val_l_' + key).value = val;
+            document.querySelector(`#val_l_${key}`).closest('form').submit();
+        }
+    </script>
+
+    <a href="{{ url_for('admin_ops.index') }}">← Назад</a>
+</body>
+</html>

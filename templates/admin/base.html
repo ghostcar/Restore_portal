@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}Админка — SQL Restore Web{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .admin-sidebar {
+            width: 200px;
+            background-color: #2c3e50;
+            color: white;
+            position: fixed;
+            height: 100%;
+            padding: 20px 0;
+        }
+        .admin-sidebar a, .admin-sidebar a:visited {
+            display: block;
+            color: #bdc3c7;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .admin-sidebar a:hover {
+            background-color: #34495e;
+            color: white;
+        }
+        .admin-content {
+            margin-left: 220px;
+            padding: 20px;
+        }
+        .admin-header {
+            background-color: #34495e;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+        }
+        .admin-breadcrumb {
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+        .admin-table th, .admin-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .admin-table th {
+            background-color: #ecf0f1;
+        }
+        .admin-form label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .admin-form input, .admin-form select, .admin-form textarea {
+            width: 100%;
+            max-width: 400px;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .admin-form button {
+            padding: 10px 20px;
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .admin-form button:hover {
+            background-color: #219653;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-sidebar">
+        <h3>Админка</h3>
+        <a href="{{ url_for('admin_ops.index') }}">Главная</a>
+        <a href="{{ url_for('admin_ops.users') }}">Пользователи</a>
+        <a href="{{ url_for('admin_ops.databases') }}">Базы данных</a>
+        <a href="{{ url_for('admin_ops.settings') }}">Настройки</a>
+        <a href="{{ url_for('admin_ops.logs') }}">Логи</a>
+    </div>
+
+    <div class="admin-content">
+        <div class="admin-header">
+            <h1>{% block admin_title %}Панель администратора{% endblock %}</h1>
+        </div>
+
+        <div class="admin-breadcrumb">
+            <a href="{{ url_for('admin_ops.index') }}">Главная</a>
+            {% block breadcrumb %}{% endblock %}
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+            {% for category, message in messages %}
+              <div class="flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% block admin_content %}{% endblock %}
+    </div>
+</body>
+</html>

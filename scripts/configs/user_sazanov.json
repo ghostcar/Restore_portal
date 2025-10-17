@@ -1,0 +1,14 @@
+{
+    "HRMDB" : "TST_HRM_SDV",
+    "UPPDB" : "TST_UPP_SDV",
+    "ERPDB":"TST_ERP_SDV",
+    "storageUser":"",
+    "storagePassw":"",
+    "HRM_storage":"Истина",
+    "UPP_storage":"Истина",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Сазанов ДВ",
+    "ERPHeader" : "ERP Сазанов ДВ",
+    "HRMHeader" : "ЗУП Сазанов ДВ"
+    }
+    

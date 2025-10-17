@@ -1,0 +1,31 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Глобальные настройки{% endblock %}
+
+{% block breadcrumb %}> <a href="{{ url_for('admin_ops.index') }}">Главная</a> > Глобальные настройки{% endblock %}
+
+{% block admin_content %}
+    <h2>Глобальные настройки</h2>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Ключ</th>
+                <th>Значение</th>
+                <th>Описание</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for setting in settings %}
+            <tr>
+                <td>{{ setting.setting_key }}</td>
+                <td>{{ setting.setting_value }}</td>
+                <td>{{ setting.description or '' }}</td>
+                <td><a href="{{ url_for('admin_ops.edit_global_setting', setting_id=setting.id) }}">Редактировать</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('admin_ops.index') }}">← Назад</a>
+{% endblock %}

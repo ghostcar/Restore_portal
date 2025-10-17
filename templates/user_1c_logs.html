@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}1С-логи для {{ target_db }} — {{ super() }}{% endblock %}
+
+{% block content %}
+    <h1>1С-логи задач восстановления для {{ target_db }}</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                {% if is_admin %}<th>ID задачи</th>{% endif %}
+                <th>Операция</th>
+                <th>Статус</th>
+                <th>Лог</th>
+                <th>Ошибка</th>
+                <th>Время</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                {% if is_admin %}<td>{{ log.job_id or '' }}</td>{% endif %}
+                <td>{{ log.operation }}</td>
+                <td><span class="status-{{ log.status.lower() }}">{{ log.status }}</span></td>
+                <td><pre style="white-space: pre-wrap; word-break: break-word;">{{ log.log_text or '' }}</pre></td>
+                <td><pre style="white-space: pre-wrap; word-break: break-word;">{{ log.error_message or '' }}</pre></td>
+                <td>{{ log.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('db_ops.index') }}">← Назад</a>
+{% endblock %}

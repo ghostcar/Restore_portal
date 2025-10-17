@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sql-restore-web"
+version = "1.0.0"
+description = "Веб-интерфейс для восстановления пользовательских баз данных MS SQL"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+license = "MIT" # <-- SPDX-выражение, PEP 639
+# Убран deprecated classifier: "License :: OSI Approved :: MIT License"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "Flask",
+    "pyodbc",
+    "PyYAML",
+    "wfastcgi",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/sql-restore-web"
+Repository = "https://github.com/yourusername/sql-restore-web.git"

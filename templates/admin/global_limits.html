@@ -1,0 +1,31 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Глобальные ограничения{% endblock %}
+
+{% block breadcrumb %}> <a href="{{ url_for('admin_ops.index') }}">Главная</a> > Глобальные ограничения{% endblock %}
+
+{% block admin_content %}
+    <h2>Глобальные ограничения</h2>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Ключ</th>
+                <th>Значение</th>
+                <th>Описание</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for limit in limits %}
+            <tr>
+                <td>{{ limit.setting_key }}</td>
+                <td>{{ limit.setting_value }}</td>
+                <td>{{ limit.description or '' }}</td>
+                <td><a href="{{ url_for('admin_ops.edit_global_limit', limit_id=limit.id) }}">Редактировать</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('admin_ops.index') }}">← Назад</a>
+{% endblock %}

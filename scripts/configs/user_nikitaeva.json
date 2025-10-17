@@ -1,0 +1,14 @@
+{
+    "HRMDB" : "TST_HRM_NES",
+    "UPPDB" : "TST_UPP_NES",
+    "ERPDB":"TST_ERP_NES",
+    "storageUser":"НикитаеваЕС",
+    "storagePassw":"zup31nsz",
+    "HRM_storage":"Ложь",
+    "UPP_storage":"Ложь",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Никитаева ЕС",
+    "ERPHeader" : "ERP Никитаева ЕС",
+    "HRMHeader" : "ЗУП Никитаева ЕС"
+    }
+    

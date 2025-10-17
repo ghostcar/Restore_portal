@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Редактировать ограничение {{ limit.setting_key }}{% endblock %}
+
+{% block breadcrumb %}> <a href="{{ url_for('admin_ops.index') }}">Главная</a> > <a href="{{ url_for('admin_ops.global_limits') }}">Глобальные ограничения</a> > Редактировать {{ limit.setting_key }}{% endblock %}
+
+{% block admin_content %}
+    <h2>Редактировать ограничение {{ limit.setting_key }}</h2>
+    <form method="POST" class="admin-form">
+        <label>Ключ: <input type="text" value="{{ limit.setting_key }}" readonly></label><br>
+        <label>Значение: <input type="text" name="value" value="{{ limit.setting_value }}" required></label><br>
+        <label>Описание: <input type="text" value="{{ limit.description or '' }}" readonly></label><br>
+        <button type="submit">Сохранить</button>
+    </form>
+    <a href="{{ url_for('admin_ops.global_limits') }}">← Назад к списку</a>
+{% endblock %}

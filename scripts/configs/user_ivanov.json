@@ -1,0 +1,13 @@
+{
+    "HRMDB" : "TST_HRM_IIS",
+    "UPPDB" : "TST_UPP_IIS",
+    "ERPDB":"TST_ERP_IIS",
+    "storageUser":"",
+    "storagePassw":"",
+    "HRM_storage":"Ложь",
+    "UPP_storage":"Ложь",
+    "ERP_storage":"Ложь",
+    "UPPHeader" : "УПП Иванов ИС",
+    "ERPHeader" : "ERP Иванов ИС",
+    "HRMHeader" : "ЗУП Иванов ИС"
+    }

@@ -1,0 +1,15 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Главная{% endblock %}
+
+{% block admin_content %}
+    <h2>Добро пожаловать в панель администратора</h2>
+    <p>Здесь вы можете управлять пользователями, базами данных, настройками и просматривать логи.</p>
+    <ul>
+        <li><a href="{{ url_for('admin_ops.users') }}">Управление пользователями</a></li>
+        <li><a href="{{ url_for('admin_ops.databases') }}">Управление базами данных</a></li>
+        <li><a href="{{ url_for('admin_ops.global_settings') }}">Глобальные настройки</a></li> <!-- Новая ссылка -->
+        <li><a href="{{ url_for('admin_ops.global_limits') }}">Глобальные ограничения</a></li> <!-- Новая ссылка -->
+        <li><a href="{{ url_for('admin_ops.logs') }}">Логи задач восстановления</a></li>
+    </ul>
+{% endblock %}

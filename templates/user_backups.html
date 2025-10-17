@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Мои бэкапы — {{ super() }}{% endblock %}
+
+{% block content %}
+    <h1>Мои бэкапы</h1>
+
+    <h2>Создать бэкап</h2>
+    <form method="POST" action="{{ url_for('db_ops.create_user_backup') }}">
+        <label>База данных:
+            <select name="database" required>
+                {% for db_name in databases %}
+                <option value="{{ db_name }}">{{ db_name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button type="submit">Создать бэкап</button>
+    </form>
+
+    <h2>Список бэкапов</h2>
+    {% if backups %}
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>База</th>
+                    <th>Файл</th>
+                    <th>Дата создания</th>
+                    <th>Описание</th>
+                    <th>Действие</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in backups %}
+                <tr>
+                    <td>{{ backup.target_db_name }}</td>
+                    <td>{{ backup.backup_file_path }}</td>
+                    <td>{{ backup.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>{{ backup.description or '' }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('db_ops.restore_from_user_backup') }}" style="display:inline;">
+                            <input type="hidden" name="backup_id" value="{{ backup.id }}">
+                            <!-- Выбор целевой БД -->
+                            <select name="target_db" required>
+                                <option value="">-- Выберите БД для восстановления --</option>
+                                {% for db_name in databases %}
+                                <option value="{{ db_name }}">{{ db_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" onclick="return confirm('Восстановить {{ backup.target_db_name }} из этого бэкапа?')">Восстановить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>У вас пока нет бэкапов.</p>
+    {% endif %}
+
+    <a href="{{ url_for('db_ops.index') }}">← Назад</a>
+{% endblock %}

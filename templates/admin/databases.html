@@ -1,0 +1,84 @@
+{% extends "admin/base.html" %}
+
+{% block admin_title %}Базы данных{% endblock %}
+
+{% block breadcrumb %}> Базы данных{% endblock %}
+
+{% block admin_content %}
+    <h2>Общие базы</h2>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Источник</th>
+                <th>Цель</th>
+                <th>Заголовок</th>
+                <th>Только для админов</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for db in common_dbs %}
+            <tr>
+                <td>{{ db.source_db_name }}</td>
+                <td>{{ db.restore_target_db }}</td>
+                <td>{{ db.header }}</td>
+                <td>{{ 'Да' if db.is_admin_only else 'Нет' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Добавить общую БД</h3>
+    <form method="POST" action="{{ url_for('admin_ops.add_common_db') }}" class="admin-form">
+        <label>Источник (имя в кластере): <input type="text" name="source" required></label><br>
+        <label>Цель (имя БД): <input type="text" name="target" required></label><br>
+        <label>Заголовок: <input type="text" name="header"></label><br>
+        <label>Только для админов: <input type="checkbox" name="is_admin_only"></label><br>
+        <button type="submit">Добавить</button>
+    </form>
+
+    <h2>Пользовательские базы</h2>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Пользователь</th>
+                <th>Цель</th>
+                <th>Источник</th>
+                <th>Уведомлять</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for db in user_dbs %}
+            <tr>
+                <td>{{ db.windows_login }}</td>
+                <td>{{ db.restore_target_db }}</td>
+                <td>{{ db.source_db_name }}</td>
+                <td>{{ 'Да' if db.notify_user else 'Нет' }}</td>
+                <td>
+                    <a href="{{ url_for('admin_ops.edit_user_db', db_id=db.id) }}">Редактировать</a> |
+                    <form method="POST" action="{{ url_for('admin_ops.delete_user_db', db_id=db.id) }}" style="display:inline;" onsubmit="return confirm('Удалить доступ к {{ db.restore_target_db }}?');">
+                        <button type="submit" style="background-color: #e74c3c;">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Добавить пользовательскую БД</h3>
+    <form method="POST" action="{{ url_for('admin_ops.add_user_db') }}" class="admin-form">
+        <label>Пользователь: 
+            <select name="user_login" required>
+                {% for u in all_users %}
+                    <option value="{{ u.windows_login }}">{{ u.windows_login }} ({{ u.full_name or '' }})</option>
+                {% endfor %}
+            </select>
+        </label><br>
+        <label>Источник (имя в кластере): <input type="text" name="source" required></label><br>
+        <label>Цель (имя БД): <input type="text" name="target" required></label><br>
+        <label>Уведомлять пользователя: <input type="checkbox" name="notify_user"></label><br>
+        <button type="submit">Добавить</button>
+    </form>
+
+    <a href="{{ url_for('admin_ops.index') }}">← Назад</a>
+{% endblock %}

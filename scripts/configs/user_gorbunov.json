@@ -1,0 +1,13 @@
+{
+    "HRMDB" : "TST_HRM_GRV",
+    "UPPDB" : "TST_UPP_GRV",
+    "ERPDB":"TST_ERP_GRV",
+    "storageUser":"ГорбуновРВ",
+    "storagePassw":"ГорбуновРВ",
+    "HRM_storage":"Истина",
+    "UPP_storage":"Истина",
+    "ERP_storage":"Истина",
+    "UPPHeader" : "УПП Горбунов РВ",
+    "ERPHeader" : "ERP Горбунов РВ",
+    "HRMHeader" : "ЗУП Горбунов РВ"
+    }
