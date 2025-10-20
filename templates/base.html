@@ -1,32 +1,64 @@
+<!-- templates/base.html -->
+
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}SQL Restore Web{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <h1>Восстановление баз данных</h1>
-        <p>Привет, <strong>{{ user or 'Гость' }}</strong>!</p>
-        {% if user %}
-            <p>Ваша почта: <strong>{{ user_email or 'не указана' }}</strong> <a href="{{ url_for('db_ops.profile') }}">[изменить]</a></p>
-            {% if is_admin %}<a href="{{ url_for('admin_ops.index') }}">[Админка]</a>{% endif %}
-        {% endif %}
-    </header>
-
-    <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="flash-messages">
-            {% for category, message in messages %}
-              <div class="flash-{{ category }}">{{ message }}</div>
-            {% endfor %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('db_ops.index') }}">SQL Restore Web</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('db_ops.index') }}">Дашборд</a>
+                    </li>
+                    {% if is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_ops.index') }}">Админка</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <span class="navbar-text">Привет, {{ user }}!</span>
+                    </li>
+                    <li class="nav-item ms-3">
+                        <a class="nav-link" href="{{ url_for('db_ops.profile') }}">[Профиль]</a>
+                    </li>
+                </ul>
             </div>
-          {% endif %}
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
         {% endwith %}
 
         {% block content %}{% endblock %}
-    </main>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

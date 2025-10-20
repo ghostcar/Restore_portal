@@ -1,8 +1,16 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, Response
-from .auth import get_current_user
-from .config_loader import get_svc_conn, is_user_admin
-import csv
+from .auth import get_current_user, is_user_admin
+from .config_loader import get_svc_conn, is_user_admin, get_global_setting
+from .db_actions import get_backup_path_for_db, allow_dynamic_backup
+from .queue import running_tasks
+import threading
+import time
+import datetime
+import pyodbc
+import os
+import json
 import io
+import csv
 
 bp = Blueprint('admin_ops', __name__, url_prefix='/admin')
 
@@ -25,7 +33,8 @@ def users():
     conn = get_svc_conn()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, windows_login, full_name, is_admin FROM Users
+        SELECT id, windows_login, full_name, email, is_admin FROM Users
+        ORDER BY windows_login
     """)
     users = cursor.fetchall()
     conn.close()
@@ -35,147 +44,190 @@ def users():
 def add_user():
     if not is_user_admin_check():
         return "Доступ запрещён", 403
-    login = request.form['login']
-    name = request.form.get('name', '')
+    login = request.form['login'].strip().lower()
+    name = request.form.get('name', '').strip()
+    email = request.form.get('email', '').strip()
     is_admin = request.form.get('is_admin') == 'on'
+    
+    if not login:
+        flash("Логин не может быть пустым", "error")
+        return redirect(url_for('admin_ops.users'))
+
     conn = get_svc_conn()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO Users (windows_login, full_name, is_admin) VALUES (?, ?, ?)", login, name, is_admin)
+        cursor.execute("""
+            INSERT INTO Users (windows_login, full_name, email, is_admin)
+            VALUES (?, ?, ?, ?)
+        """, login, name, email, is_admin)
         conn.commit()
-        flash("Пользователь добавлен", "success")
+        flash(f"Пользователь {login} добавлен", "success")
     except Exception as e:
-        flash(f"Ошибка: {e}", "error")
+        flash(f"Ошибка добавления пользователя: {e}", "error")
     conn.close()
     return redirect(url_for('admin_ops.users'))
+
+@bp.route('/users/edit/<int:user_id>', methods=['GET', 'POST'])
+def edit_user(user_id):
+    if not is_user_admin_check():
+        return "Доступ запрещён", 403
+    
+    conn = get_svc_conn()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
+        is_admin = request.form.get('is_admin') == 'on'
+        
+        try:
+            cursor.execute("""
+                UPDATE Users
+                SET full_name = ?, email = ?, is_admin = ?
+                WHERE id = ?
+            """, name, email, is_admin, user_id)
+            conn.commit()
+            flash("Пользователь обновлён", "success")
+        except Exception as e:
+            flash(f"Ошибка обновления пользователя: {e}", "error")
+        conn.close()
+        return redirect(url_for('admin_ops.users'))
+
+    cursor.execute("""
+        SELECT id, windows_login, full_name, email, is_admin FROM Users WHERE id = ?
+    """, user_id)
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        flash("Пользователь не найден", "error")
+        return redirect(url_for('admin_ops.users'))
+        
+    return render_template('admin/edit_user.html', user=user)
 
 @bp.route('/users/delete/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
     if not is_user_admin_check():
         return "Доступ запрещён", 403
+    
     conn = get_svc_conn()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Users WHERE id = ?", user_id)
-    conn.commit()
+    try:
+        cursor.execute("DELETE FROM Users WHERE id = ?", user_id)
+        conn.commit()
+        flash("Пользователь удалён", "success")
+    except Exception as e:
+        flash(f"Ошибка удаления пользователя: {e}", "error")
     conn.close()
-    flash("Пользователь удалён", "success")
     return redirect(url_for('admin_ops.users'))
 
 @bp.route('/databases')
 def databases():
     if not is_user_admin_check():
         return "Доступ запрещён", 403
+    
     conn = get_svc_conn()
     cursor = conn.cursor()
+    
+    # Получаем общие БД
     cursor.execute("""
-        SELECT id, source_db_name, restore_target_db, is_admin_only FROM CommonDatabases
+        SELECT id, source_db_name, restore_target_db, header, is_admin_only
+        FROM CommonDatabases
+        ORDER BY restore_target_db
     """)
     common_dbs = cursor.fetchall()
+    
+    # Получаем пользовательские БД
     cursor.execute("""
-        SELECT ud.id, u.windows_login, ud.restore_target_db, ud.source_db_name
+        SELECT ud.id, u.windows_login, ud.restore_target_db, ud.source_db_name, ud.header, ud.use_storage
         FROM UserDatabases ud
         JOIN Users u ON ud.user_id = u.id
+        ORDER BY u.windows_login, ud.restore_target_db
     """)
     user_dbs = cursor.fetchall()
+    
     conn.close()
+    
     return render_template('admin/databases.html', common_dbs=common_dbs, user_dbs=user_dbs)
-
-@bp.route('/databases/add_common', methods=['POST'])
-def add_common_db():
-    if not is_user_admin_check():
-        return "Доступ запрещён", 403
-    source = request.form['source']
-    target = request.form['target']
-    is_admin_only = request.form.get('is_admin_only') == 'on'
-    header = request.form.get('header', '')
-    conn = get_svc_conn()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            INSERT INTO CommonDatabases (source_db_name, restore_target_db, backup_path_template, header, is_admin_only)
-            VALUES (?, ?, 'D:\\SQLBackups\\Common', ?, ?)
-        """, source, target, header, is_admin_only)
-        conn.commit()
-        flash("Общая БД добавлена", "success")
-    except Exception as e:
-        flash(f"Ошибка: {e}", "error")
-    conn.close()
-    return redirect(url_for('admin_ops.databases'))
-
-@bp.route('/databases/add_user_db', methods=['POST'])
-def add_user_db():
-    if not is_user_admin_check():
-        return "Доступ запрещён", 403
-    user_login = request.form['user_login']
-    source = request.form['source']
-    target = request.form['target']
-    conn = get_svc_conn()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM Users WHERE windows_login = ?", user_login)
-    user_row = cursor.fetchone()
-    if not user_row:
-        flash("Пользователь не найден", "error")
-        return redirect(url_for('admin_ops.databases'))
-    user_id = user_row[0]
-    try:
-        cursor.execute("""
-            INSERT INTO UserDatabases (user_id, source_db_name, restore_target_db, backup_path_template)
-            VALUES (?, ?, ?, 'D:\\SQLBackups\\User')
-        """, user_id, source, target)
-        conn.commit()
-        flash("Пользовательская БД добавлена", "success")
-    except Exception as e:
-        flash(f"Ошибка: {e}", "error")
-    conn.close()
-    return redirect(url_for('admin_ops.databases'))
 
 @bp.route('/settings')
 def settings():
     if not is_user_admin_check():
         return "Доступ запрещён", 403
+    
     conn = get_svc_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT setting_key, setting_value, description FROM GlobalSettings")
+    
+    # Получаем GlobalSettings
+    cursor.execute("""
+        SELECT setting_key, setting_value, description
+        FROM GlobalSettings
+        ORDER BY setting_key
+    """)
     global_settings = cursor.fetchall()
-    cursor.execute("SELECT setting_key, setting_value, description FROM GlobalLimits")
+    
+    # Получаем GlobalLimits
+    cursor.execute("""
+        SELECT setting_key, setting_value, description
+        FROM GlobalLimits
+        ORDER BY setting_key
+    """)
     limits = cursor.fetchall()
+    
     conn.close()
+    
     return render_template('admin/settings.html', global_settings=global_settings, limits=limits)
 
 @bp.route('/settings/update', methods=['POST'])
 def update_setting():
     if not is_user_admin_check():
         return "Доступ запрещён", 403
+    
     key = request.form['key']
     value = request.form['value']
     table = request.form['table']  # 'GlobalSettings' или 'GlobalLimits'
+    
     conn = get_svc_conn()
     cursor = conn.cursor()
     try:
         if table == 'GlobalSettings':
-            cursor.execute("UPDATE GlobalSettings SET setting_value = ? WHERE setting_key = ?", value, key)
+            cursor.execute("""
+                UPDATE GlobalSettings
+                SET setting_value = ?
+                WHERE setting_key = ?
+            """, value, key)
         elif table == 'GlobalLimits':
-            cursor.execute("UPDATE GlobalLimits SET setting_value = ? WHERE setting_key = ?", value, key)
+            cursor.execute("""
+                UPDATE GlobalLimits
+                SET setting_value = ?
+                WHERE setting_key = ?
+            """, value, key)
         conn.commit()
-        flash("Настройка обновлена", "success")
+        flash(f"Настройка {key} обновлена", "success")
     except Exception as e:
-        flash(f"Ошибка: {e}", "error")
+        flash(f"Ошибка обновления настройки: {e}", "error")
     conn.close()
+    
     return redirect(url_for('admin_ops.settings'))
 
 @bp.route('/logs')
 def logs():
     if not is_user_admin_check():
         return "Доступ запрещён", 403
+    
     conn = get_svc_conn()
     cursor = conn.cursor()
+    
+    # Получаем логи RestoreJobs
     cursor.execute("""
         SELECT windows_user, target_db, status, started_at, finished_at, error_message
         FROM RestoreJobs
         ORDER BY started_at DESC
     """)
     logs = cursor.fetchall()
+    
     conn.close()
+    
     return render_template('admin/logs.html', logs=logs)
 
 @bp.route('/users/edit/<int:user_id>', methods=['GET', 'POST'])

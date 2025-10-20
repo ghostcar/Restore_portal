@@ -6,3 +6,4 @@ PyYAML
 # ldap3==2.9.1
 # Дополнительно для wfastcgi (если используется IIS)
 wfastcgi
+cryptography

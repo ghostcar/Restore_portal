@@ -5,7 +5,7 @@ import datetime
 import threading
 import time
 from collections import deque
-from flask import Blueprint, request, jsonify, render_template, flash,  redirect, url_for # добавим flash
+from flask import Blueprint, request, jsonify, render_template, flash,  redirect, url_for, Response, stream_with_context # добавим flash
 from .auth import get_current_user
 from .config_loader import get_user_databases, get_common_databases, get_db_config, get_svc_conn, is_user_admin, get_global_setting
 from .onec_commands import run_1c_command_via_1cv8, run_1c_command_via_rac
@@ -14,6 +14,8 @@ from .logger_db import log_user_action, log_1c_operation
 from .db_utils import get_svc_conn, get_sql_server_conn, get_sql_server_conn_config
 from flask import current_app
 import logging
+import re
+import json
 
 bp = Blueprint('db_ops', __name__)
 
@@ -27,8 +29,25 @@ allow_dynamic_backup = get_global_setting('allow_dynamic_backup_creation') == '1
 shutdown_event = threading.Event()
 running_tasks = set()
 
+def validate_db_name(db_name):
+    """Проверяет, что имя БД состоит только из допустимых символов."""
+    if not re.match(r'^[A-Za-z0-9_]+$', db_name):
+        raise ValueError(f"Недопустимое имя базы данных: {db_name}")
+    return True
+
+def get_quoted_name(db_name):
+    """Возвращает безопасно экранированное имя БД через QUOTENAME."""
+    validate_db_name(db_name)
+    conn = get_sql_server_conn()  # Функция, которая возвращает подключение к SQL Server
+    cursor = conn.cursor()
+    cursor.execute("SELECT QUOTENAME(?)", db_name)
+    quoted = cursor.fetchone()[0]
+    conn.close()
+    return quoted
+
 def load_pending_jobs_from_db():
     """Загружает все pending задачи из БД при старте приложения."""
+    recover_stuck_jobs()    # <-- Восстанавливаем зависшие задачи
     conn = get_svc_conn()
     cursor = conn.cursor()
     cursor.execute("""
@@ -104,18 +123,60 @@ def worker_loop():
             # Ждём перед следующей попыткой
             shutdown_event.wait(timeout=5)
     current_app.logger.info("worker_loop: Поток остановлен")
-    
-def update_job_status(job_id, status, error_msg=None):
+
+def recover_stuck_jobs():
+    """Переводит "зависшие" задачи (status = 'running' давно) в Error."""
     conn = get_svc_conn()
     cursor = conn.cursor()
-    if status == 'running':
-        cursor.execute("UPDATE RestoreQueue SET status = ?, started_at = GETDATE() WHERE id = ?", status, job_id)
-    elif status == 'completed':
-        cursor.execute("UPDATE RestoreQueue SET status = ?, finished_at = GETDATE() WHERE id = ?", status, job_id)
-    elif status == 'failed':
-        cursor.execute("UPDATE RestoreQueue SET status = ?, finished_at = GETDATE(), error_message = ? WHERE id = ?", status, error_msg, job_id)
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("""
+            UPDATE RestoreQueue
+            SET status = 'failed', finished_at = GETDATE(), error_message = 'Задача зависла, процесс перезапущен'
+            WHERE status = 'running' AND started_at < DATEADD(minute, -30, GETDATE())
+        """)
+        conn.commit()
+        rows_affected = cursor.rowcount
+        if rows_affected > 0:
+            current_app.logger.info(f"Восстановлено {rows_affected} зависших задач")
+    except Exception as e:
+        current_app.logger.error(f"Ошибка при восстановлении зависших задач: {e}")
+    finally:
+        conn.close()
+    
+def update_job_status(job_id, status, error_message=None):
+    """Обновляет статус задачи в RestoreQueue и записывает в RestoreJobs"""
+    conn = get_svc_conn()
+    cursor = conn.cursor()
+    try:
+        # Атомарное обновление статуса
+        if status == 'running':
+            cursor.execute("""
+                UPDATE RestoreQueue
+                SET status = ?, started_at = GETDATE()
+                WHERE id = ?
+            """, status, job_id)
+        elif status in ('completed', 'failed'):
+            cursor.execute("""
+                UPDATE RestoreQueue
+                SET status = ?, finished_at = GETDATE(), error_message = ?
+                WHERE id = ?
+            """, status, error_message, job_id)
+
+        # Записываем в историю RestoreJobs
+        cursor.execute("""
+            INSERT INTO RestoreJobs (job_id, windows_user, target_db, status, error_message)
+            SELECT id, windows_user, target_db, status, error_message
+            FROM RestoreQueue
+            WHERE id = ?
+        """, job_id)
+
+        conn.commit()
+    except Exception as e:
+        current_app.logger.error(f"Ошибка при обновлении статуса задачи {job_id}: {e}")
+    finally:
+        conn.close()
+    
+    
 def perform_restore_job(job):
     # job = {'id': ..., 'windows_user': ..., 'target_db': ...}
     job_id = job['id']
@@ -363,21 +424,22 @@ def restore_db_from_backup(target_db_name, backup_file_path, sql_login, sql_pass
     
     conn.autocommit = True
     cursor = conn.cursor()
-
-    cursor.execute(f"ALTER DATABASE [{target_db_name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+    quoted_name = get_quoted_name(target_db_name)
+    cursor.execute(f"ALTER DATABASE [{quoted_name} ] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
     cursor.execute(f"""
-        RESTORE DATABASE [{target_db_name}]
+        RESTORE DATABASE [{quoted_name}]
         FROM DISK = ?
         WITH REPLACE, RECOVERY, STATS = 5
     """, backup_file_path)
-    cursor.execute(f"ALTER DATABASE [{target_db_name}] SET MULTI_USER")
-    cursor.execute(f"ALTER AUTHORIZATION ON DATABASE::[{target_db_name}] TO [sa]")
-    cursor.execute(f"ALTER DATABASE [{target_db_name}] SET RECOVERY SIMPLE")
-    cursor.execute(f"USE [{target_db_name}]; DBCC SHRINKFILE (2, TRUNCATEONLY);")
+    cursor.execute(f"ALTER DATABASE [{quoted_name}] SET MULTI_USER")
+    cursor.execute(f"ALTER AUTHORIZATION ON DATABASE::[{quoted_name}] TO [sa]")
+    cursor.execute(f"ALTER DATABASE [{quoted_name}] SET RECOVERY SIMPLE")
+    cursor.execute(f"USE [{quoted_name}]; DBCC SHRINKFILE (2, TRUNCATEONLY);")
 
     conn.close()
 
 def set_parallelism(target_db_name, degree, sql_login, sql_password):
+    quoted_name = get_quoted_name(target_db_name)
      # Подключаемся к master через основной SQL Server
     conn_str = get_sql_server_conn_config() # <-- Используем функцию из db_utils
     # Перезаписываем логин/пароль из параметров функции (это могут быть логины из БД)
@@ -387,7 +449,7 @@ def set_parallelism(target_db_name, degree, sql_login, sql_password):
     conn.autocommit = True
     cursor = conn.cursor()
     cursor.execute(f"""
-        USE [{target_db_name}];
+        USE [{quoted_name}];
         EXEC sp_configure 'show advanced options', 1;
         RECONFIGURE WITH OVERRIDE;
         EXEC sp_configure 'max degree of parallelism', {degree};
@@ -494,6 +556,52 @@ def index():
             }
         conn.close()
 
+#    return render_template(
+#        'dashboard.html',
+#        databases=all_dbs,
+#        queue=queue_data,
+#        user=user,
+#        user_email=user_email,
+#        is_admin=is_admin,
+#        status_data=status_data,
+#        total_queue_count=total_queue_count,
+#        user_queue_count=user_queue_count,
+#        active_queue_count=active_queue_count,          # <-- Новое
+#        total_active_count=total_active_count,             # <-- Новое
+#        script_name=request.environ.get('SCRIPT_NAME', '')
+#    )
+ # НОВОЕ: Получаем последний лог для выполняющихся задач
+    last_logs = {}
+    for db in all_dbs:
+        target_db = db['target']
+        conn = get_svc_conn()
+        cursor = conn.cursor()
+        # Ищем последнюю RUNNING задачу
+        cursor.execute("""
+            SELECT TOP 1 rj.id
+            FROM RestoreJobs rj
+            WHERE rj.target_db = ? AND rj.status = 'running'
+            ORDER BY rj.started_at DESC
+        """, target_db)
+        job_row = cursor.fetchone()
+        if job_row:
+            job_id = job_row[0]
+            # Получаем последний лог по этой задаче
+            cursor.execute("""
+                SELECT TOP 1 message
+                FROM RestoreTaskLogs
+                WHERE job_id = ?
+                ORDER BY timestamp DESC
+            """, job_id)
+            log_row = cursor.fetchone()
+            if log_row:
+                last_logs[target_db] = log_row[0]
+            else:
+                last_logs[target_db] = "Нет логов"
+        else:
+            last_logs[target_db] = ""
+        conn.close()
+
     return render_template(
         'dashboard.html',
         databases=all_dbs,
@@ -504,11 +612,12 @@ def index():
         status_data=status_data,
         total_queue_count=total_queue_count,
         user_queue_count=user_queue_count,
-        active_queue_count=active_queue_count,          # <-- Новое
-        total_active_count=total_active_count,             # <-- Новое
-        script_name=request.environ.get('SCRIPT_NAME', '')
-    )
-
+        active_queue_count=active_queue_count,
+        total_active_count=total_active_count,
+        script_name=request.environ.get('SCRIPT_NAME', ''),
+        last_logs=last_logs  # <-- Передаём последние логи
+    )    
+    
 @bp.route('/profile', methods=['GET', 'POST'])
 def profile():
     user = get_current_user()
@@ -756,10 +865,11 @@ def create_user_backup():
     sql_password = db_config.get('sql_password', '...')
 
     try:
+        quoted_name = get_quoted_name(target_db)
         # Подключаемся к prod-серверу (или к серверу БД, если это не prod)
         # Используем настройки из config/app_config.json для основного сервера
         sql_server_address = get_global_setting('sql_server_address') or 'localhost'
-        prod_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={sql_server_address};DATABASE={target_db};UID={sql_login};PWD={sql_password}"
+        prod_conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={sql_server_address};DATABASE={quoted_name};UID={sql_login};PWD={sql_password}"
         prod_conn = pyodbc.connect(prod_conn_str)
 
         # ... (остальной код бэкапа)
@@ -838,9 +948,9 @@ def restore_from_user_backup():
         )
         restore_conn.autocommit = True
         restore_cursor = restore_conn.cursor()
-
+        quoted_name = get_quoted_name(target_db)
         # Отключаем пользователей
-        restore_cursor.execute(f"ALTER DATABASE [{target_db}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+        restore_cursor.execute(f"ALTER DATABASE [{quoted_name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
 
         # Восстанавливаем
         # Для простоты, используем MOVE с именами файлов из БД-источника
@@ -848,19 +958,19 @@ def restore_from_user_backup():
         # В простом случае, можно не указывать MOVE, и файлы будут восстановлены в те же папки.
         # Или использовать путь из GlobalSettings для DATA/LOG.
         restore_cursor.execute(f"""
-            RESTORE DATABASE [{target_db}]
+            RESTORE DATABASE [{quoted_name}]
             FROM DISK = ?
             WITH REPLACE, RECOVERY, STATS = 5
         """, backup_file_path)
 
         # Вернём в строй
-        restore_cursor.execute(f"ALTER DATABASE [{target_db}] SET MULTI_USER")
-
+        restore_cursor.execute(f"ALTER DATABASE [{quoted_name}] SET MULTI_USER")
+        
         # Остальные настройки: владелец, режим восстановления, сжатие
-        restore_cursor.execute(f"ALTER AUTHORIZATION ON DATABASE::[{target_db}] TO [sa]")
-        restore_cursor.execute(f"ALTER DATABASE [{target_db}] SET RECOVERY SIMPLE")
+        restore_cursor.execute(f"ALTER AUTHORIZATION ON DATABASE::[{quoted_name}] TO [sa]")
+        restore_cursor.execute(f"ALTER DATABASE [{quoted_name}] SET RECOVERY SIMPLE")
         restore_cursor.execute(f"""
-            USE [{target_db}];
+            USE [{quoted_name}];
             DBCC SHRINKFILE (2, TRUNCATEONLY);
         """)
 
@@ -901,3 +1011,49 @@ def restore_from_user_backup():
         error_msg = str(e)
         log_user_action(user, 'restore_from_backup_failed', target_db, f"Ошибка восстановления из {backup_file_path}: {error_msg}")
         return jsonify({"error": f"Ошибка восстановления: {error_msg}"}), 500
+    
+@bp.route('/logs/stream/<int:job_id>')
+def stream_logs(job_id):
+    """SSE endpoint для потоковой передачи логов задачи."""
+    user = get_current_user()
+    is_admin = is_user_admin(user)
+
+    # Проверяем, имеет ли пользователь доступ к задаче
+    conn = get_svc_conn()
+    cursor = conn.cursor()
+    if is_admin:
+        cursor.execute("SELECT id FROM RestoreQueue WHERE id = ?", job_id)
+    else:
+        cursor.execute("SELECT id FROM RestoreQueue WHERE id = ? AND windows_user = ?", job_id, user)
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return "Нет доступа к задаче", 403
+
+    def generate():
+        last_id = 0
+        while True:
+            conn = get_svc_conn()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, message, timestamp
+                FROM RestoreTaskLogs
+                WHERE job_id = ? AND id > ?
+                ORDER BY id
+            """, job_id, last_id)
+            rows = cursor.fetchall()
+            conn.close()
+
+            if rows:
+                for row in rows:
+                    log_id, message, timestamp = row
+                    yield f" {json.dumps({'id': log_id, 'message': message, 'timestamp': timestamp.isoformat()})}\n\n"
+                    last_id = log_id
+            else:
+                # Отправляем heartbeat, чтобы соединение не закрывалось
+                yield " {}\n\n"
+
+            time.sleep(1)  # Пауза 1 секунда
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")

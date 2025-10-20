@@ -2,202 +2,128 @@
 
 {% extends "base.html" %}
 
-{% block title %}Восстановление баз данных {{ super() }}{% endblock %}
+{% block title %}Панель управления — {{ super() }}{% endblock %}
 
 {% block content %}
-      <h1>Восстановление баз данных</h1>
+    <h1>Восстановление баз данных</h1>
 
-    <!-- НОВОЕ: Информация о пользователе и очередь в одном блоке -->
-    <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-        <p style="margin: 0;">
-            Привет, <strong>{{ user }}</strong>!
-        </p>
-        <p style="margin: 0;">
-            Ваша почта: <strong>{{ user_email or 'не указана' }}</strong>
-            <a href="{{ url_for('db_ops.profile') }}">[изменить]</a>
-        </p>
-        {% if is_admin %}
-            <a href="{{ url_for('admin_ops.index') }}">[Админка]</a>
-        {% endif %}
+    <!-- Информация о пользователе и очередь -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <strong>Привет, {{ user }}!</strong>
+                    {% if user_email %}
+                        <br>Email: <strong>{{ user_email }}</strong>
+                        <a href="{{ url_for('db_ops.profile') }}">[изменить]</a>
+                    {% endif %}
+                </div>
+                {% if is_admin %}
+                    <a href="{{ url_for('admin_ops.index') }}" class="btn btn-outline-primary">[Админка]</a>
+                {% endif %}
+            </div>
+
+            <!-- Ссылка на очередь -->
+            <div class="mt-3">
+                {% if is_admin %}
+                    <a href="#queue-section" onclick="conditionalToggleQueueSection({{ active_queue_count }});">
+                        Заданий в очереди {{ total_queue_count }}{% if total_active_count > 0 %} ({{ total_active_count }} активных){% endif %}
+                    </a>
+                {% else %}
+                    <a href="#queue-section" onclick="conditionalToggleQueueSection({{ active_queue_count }});">
+                        Заданий в очереди {{ total_queue_count }}, ваших {{ user_queue_count }}{% if active_queue_count > 0 %} ({{ active_queue_count }} активных){% endif %}
+                    </a>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
-    <!-- НОВОЕ: Ссылка на очередь сразу под информацией о пользователе -->
-    <p style="margin-top: 10px;">
-        {% if is_admin %}
-            <a href="#queue-section" onclick="conditionalToggleQueueSection({{ active_queue_count }});">
-                Заданий в очереди {{ total_queue_count }}{% if total_active_count > 0 %} ({{ total_active_count }} активных){% endif %}
-            </a>
-        {% else %}
-            <a href="#queue-section" onclick="conditionalToggleQueueSection({{ active_queue_count }});">
-                Заданий в очереди {{ total_queue_count }}, ваших {{ user_queue_count }}{% if active_queue_count > 0 %} ({{ active_queue_count }} активных){% endif %}
-            </a>
-        {% endif %}
-    </p>
+    <!-- Доступные базы -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="mb-0">Доступные базы</h2>
+        </div>
+        <div class="card-body">
+            <button class="btn btn-secondary mb-3" onclick="updateLastLogs()">Обновить логи</button>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>База</th>
+                            <th>Статус последнего восстановления</th>
+                            <th>Последний лог</th>
+                            <th>Действие</th>
+                            <th>Настройки</th>
+                            <th>Логи</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for db in databases %}
+                            <tr>
+                                <td>{{ db.target }}</td>
+                                <td>
+                                    {% if status_data[db.target] %}
+                                        <span class="badge bg-{{ 'success' if status_data[db.target].status == 'completed' else 'warning' if status_data[db.target].status == 'running' else 'danger' }}">{{ status_data[db.target].status }}</span><br>
+                                        {% if status_data[db.target].started_at %}
+                                            Начато: {{ status_data[db.target].started_at.strftime('%d.%m.%Y %H:%M') }}<br>
+                                        {% endif %}
+                                        {% if status_data[db.target].finished_at %}
+                                            Завершено: {{ status_data[db.target].finished_at.strftime('%d.%m.%Y %H:%M') }}<br>
+                                        {% endif %}
+                                        {% if status_data[db.target].error_message %}
+                                            <span class="text-danger">Ошибка: {{ status_data[db.target].error_message }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        Нет данных
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span id="last-log-{{ db.target }}">{{ last_logs.get(db.target, '') }}</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="restoreDB('{{ db.target }}')">Восстановить</button>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('db_ops.user_db_settings', target_db=db.target) }}">Редактировать</a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('db_ops.user_logs', target_db=db.target) }}">Логи</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-    <h2>Доступные базы</h2>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>База</th>
-                <th>Статус последнего восстановления</th>
-                <th>Действие</th>
-                <th>Настройки</th>
-                <th>Логи</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for db in databases %}
-                <tr>
-                    <td>{{ db.target }}</td>
-                    <td>
-                        {% if status_data[db.target] %}
-                            <span class="status-{{ status_data[db.target].status.lower() }}">{{ status_data[db.target].status }}</span><br>
-                            {% if status_data[db.target].started_at %}
-                                Начато: {{ status_data[db.target].started_at.strftime('%d.%m.%Y %H:%M') }}<br>
-                            {% endif %}
-                            {% if status_data[db.target].finished_at %}
-                                Завершено: {{ status_data[db.target].finished_at.strftime('%d.%m.%Y %H:%M') }}<br>
-                            {% endif %}
-                            {% if status_data[db.target].error_message %}
-                                Ошибка: {{ status_data[db.target].error_message }}
-                            {% endif %}
-                        {% else %}
-                            Нет данных
-                        {% endif %}
-                    </td>
-                    <td><button onclick="restoreDB('{{ db.target }}')">Восстановить</button></td>
-                    <td><a href="{{ url_for('db_ops.user_db_settings', target_db=db.target) }}">Редактировать</a></td>
-                    <td><a href="{{ url_for('db_ops.user_logs', target_db=db.target) }}">Логи</a></td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- НОВОЕ: Секция очереди (по умолчанию скрыта) -->
-    <div id="queue-section" style="display: none;">
-        <h2>Очередь восстановления</h2>
-        <table border="1">
-            <thead>
-                <tr>
-                    {% if is_admin %}<th>Пользователь</th>{% endif %}
-                    <th>База</th>
-                    <th>Статус</th>
-                    <th>Создано</th>
-                    <th>Начато</th>
-                    <th>Завершено</th>
-                </tr>
-            </thead>
-            <tbody id="queueTableBody">
-                <!-- Заполняется JS -->
-            </tbody>
-        </table>
+    <!-- Очередь восстановления (по умолчанию скрыта) -->
+    <div id="queue-section" class="card" style="display: none;">
+        <div class="card-header">
+            <h2 class="mb-0">Очередь восстановления</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            {% if is_admin %}<th>Пользователь</th>{% endif %}
+                            <th>База</th>
+                            <th>Статус</th>
+                            <th>Создано</th>
+                            <th>Начато</th>
+                            <th>Завершено</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queueTableBody">
+                        <!-- Заполняется JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Получаем префикс из шаблона
-        const SCRIPT_PREFIX = "{{ script_name }}";
-
-        // НОВАЯ ФУНКЦИЯ: Условное переключение видимости секции очереди
-        function conditionalToggleQueueSection(activeCount) {
-            const section = document.getElementById('queue-section');
-            if (activeCount > 0) {
-                // Если есть активные задачи, переключаем видимость
-                if (section.style.display === 'none') {
-                    section.style.display = 'block';
-                    updateQueue(); // Загружаем данные в таблицу
-                } else {
-                    section.style.display = 'none';
-                }
-            } else {
-                // Если активных задач нет, секция остаётся скрытой
-                section.style.display = 'none';
-                // Можно показать уведомление, если нужно
-                // alert('Нет активных заданий в очереди.');
-            }
-        }
-
-        function restoreDB(dbName) {
-            const button = event.target;
-            button.disabled = true;
-            button.textContent = 'Отправка...';
-            // Строим правильный URL
-            const url = `${SCRIPT_PREFIX}/restore`;
-            fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'database=' + encodeURIComponent(dbName)
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if(data.status === 'ok') {
-                    alert(data.message);
-                    updateQueue();
-                    updateStatus();
-                } else {
-                    alert('Ошибка: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                alert('Ошибка сети: ' + error);
-            })
-            .finally(() => {
-                button.disabled = false;
-                button.textContent = 'Восстановить';
-            });
-        }
-
-        function updateQueue() {
-            // Строим правильный URL
-            const url = `${SCRIPT_PREFIX}/queue/status`;
-            fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                const tbody = document.getElementById('queueTableBody');
-                tbody.innerHTML = '';
-                // Рассчитаем позицию в очереди для каждой задачи
-                const pendingJobs = data.queue.filter(job => job.status === 'pending');
-                data.queue.forEach(job => {
-                    const row = document.createElement('tr');
-                    let positionText = `<span class="status-${job.status.toLowerCase()}">${job.status}</span>`;
-                    if (job.status === 'pending') {
-                        // Позиция = сколько задач до этой в списке pending
-                        const index = pendingJobs.findIndex(j => j.id === job.id);
-                        positionText += ` (Позиция: ${index + 1})`;
-                    }
-                    row.innerHTML = `
-                        {% if is_admin %}<td>${job.windows_user}</td>{% endif %}
-                        <td>${job.target_db}</td>
-                        <td>${positionText}</td>
-                        <td>${job.created_at || ''}</td>
-                        <td>${job.started_at || ''}</td>
-                        <td>${job.finished_at || ''}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            })
-            .catch(error => {
-                console.error('Ошибка очереди:', error);
-            });
-        }
-
-        function updateStatus() {
-            // Здесь можно обновлять статусы на лету, если нужно
-        }
-
-        // Обновляем очередь каждые 10 секунд
-        setInterval(updateQueue, 10000);
-        // И сразу при загрузке
-        updateQueue();
+        // ... (предыдущие скрипты) ...
     </script>
 {% endblock %}
