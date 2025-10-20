@@ -17,6 +17,12 @@ import logging
 import re
 import json
 
+try:
+    from app.services import worker as services_worker
+except Exception:
+    services_worker = None
+    
+
 bp = Blueprint('db_ops', __name__)
 
 # --- Очередь восстановления ---
@@ -397,10 +403,10 @@ def get_user_email(windows_login):
     conn.close()
     return row[0] if row else None
 
-def restore_worker():
-    """Фоновый поток, который обрабатывает очередь задач RestoreQueue."""
-    load_pending_jobs_from_db()  # <-- Загружаем pending задачи при старте
-    worker_loop()  # <-- Запускаем основной цикл
+#def legacy_restore_worker():
+#    """Фоновый поток, который обрабатывает очередь задач RestoreQueue."""
+#    load_pending_jobs_from_db()  # <-- Загружаем pending задачи при старте
+#    worker_loop()  # <-- Запускаем основной цикл
     
 def get_backup_path_for_db(source_db_name):
     today = datetime.date.today()
